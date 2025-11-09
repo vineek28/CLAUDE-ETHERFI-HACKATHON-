@@ -1,9 +1,51 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
+import { getDeFiSummary } from '@/lib/defiLlamaService';
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY || '',
 });
+
+// Fetch live DeFi data for chatbot context
+async function getLiveDeFiContext(): Promise<string> {
+  try {
+    const data = await getDeFiSummary();
+    
+    return `
+LIVE DEFI DATA (Current as of ${new Date().toLocaleString()}):
+
+ETH Price: $${data.ethPrices.eth.toFixed(2)}
+eETH Price: $${data.ethPrices.eeth?.toFixed(2) || 'N/A'}
+
+Ether.fi Protocol:
+- Total Value Locked (TVL): $${(data.etherfi.tvl / 1e9).toFixed(2)}B
+- 24h Change: ${data.etherfi.change_1d?.toFixed(2)}%
+- 7d Change: ${data.etherfi.change_7d?.toFixed(2)}%
+- Current APY: ${data.etherfiYields[0]?.apy?.toFixed(2) || 'N/A'}%
+- Market Cap: $${data.etherfi.mcap ? (data.etherfi.mcap / 1e9).toFixed(2) + 'B' : 'N/A'}
+- Category: ${data.etherfi.category}
+
+Top DeFi Protocols:
+${data.topProtocols.slice(0, 5).map((p, i) => 
+  `${i + 1}. ${p.name} - TVL: $${(p.tvl / 1e9).toFixed(2)}B (${p.change_7d?.toFixed(2)}% 7d)`
+).join('\n')}
+
+Total DeFi Market TVL: $${(data.totalTVL / 1e9).toFixed(2)}B
+Ether.fi Market Share: ${((data.etherfi.tvl / data.totalTVL) * 100).toFixed(2)}%
+
+USE THIS LIVE DATA when answering questions about:
+- Current prices, TVL, APY, or market stats
+- Ether.fi's performance or position in the market
+- Comparisons with other protocols
+- Yield estimates or staking rewards
+
+Always cite that your data is "live" or "current" when using these numbers.
+`;
+  } catch (error) {
+    console.error('Error fetching DeFi context for chatbot:', error);
+    return 'Live DeFi data temporarily unavailable. Use general knowledge for estimates.';
+  }
+}
 
 const FINNY_SYSTEM_PROMPT = `You are Finny, a friendly and helpful finance buddy who helps people learn about Ether.fi, Ethereum staking, and DeFi. Your personality traits:
 
@@ -43,10 +85,16 @@ export async function POST(req: NextRequest) {
   try {
     const { messages } = await req.json();
 
+    // Fetch live DeFi data to inject into the conversation
+    const liveContext = await getLiveDeFiContext();
+
+    // Combine system prompt with live data
+    const enhancedSystemPrompt = `${FINNY_SYSTEM_PROMPT}\n\n${liveContext}`;
+
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 500,
-      system: FINNY_SYSTEM_PROMPT,
+      system: enhancedSystemPrompt,
       messages: messages,
     });
 

@@ -218,8 +218,8 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## 👥 Contributors
 
-- [@vineek28](https://github.com/vineek28) - Lead Developer
-- [Add second contributor here]
+- [@vineek28](https://github.com/vineek28) - Co-Developer
+- [@vinayvikkranth] - Co-Developer
 
 ## 📄 License
 
